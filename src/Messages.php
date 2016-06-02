@@ -4,6 +4,7 @@ namespace Slim\Flash;
 use ArrayAccess;
 use RuntimeException;
 use InvalidArgumentException;
+use Illuminate\Session\SessionManager;
 
 /**
  * Flash messages
@@ -27,9 +28,16 @@ class Messages
     /**
      * Message storage
      *
-     * @var null|array|ArrayAccess
+     * @var null|array|ArrayAccess|SessionManager
      */
     protected $storage;
+
+    /**
+     * Message storage Type
+     *
+     * @var boolean
+     */
+    protected $storageTypeIsSessionManager = false;
 
     /**
      * Message storage key
@@ -41,14 +49,18 @@ class Messages
     /**
      * Create new Flash messages service provider
      *
-     * @param null|array|ArrayAccess $storage
+     * @param null|array|ArrayAccess|SessionManager $storage
      * @throws RuntimeException if the session cannot be found
      * @throws InvalidArgumentException if the store is not array-like
      */
     public function __construct(&$storage = null)
     {
+        // Set storage type
+        if ($storage instanceof SessionManager)
+            $this->storageTypeIsSessionManager = true;
+
         // Set storage
-        if (is_array($storage) || $storage instanceof ArrayAccess) {
+        if (is_array($storage) || $storage instanceof ArrayAccess || $this->storageTypeIsSessionManager) {
             $this->storage = &$storage;
         } elseif (is_null($storage)) {
             if (!isset($_SESSION)) {
@@ -60,10 +72,18 @@ class Messages
         }
 
         // Load messages from previous request
-        if (isset($this->storage[$this->storageKey]) && is_array($this->storage[$this->storageKey])) {
-            $this->fromPrevious = $this->storage[$this->storageKey];
+        if ($this->storageTypeIsSessionManager) {
+            if (is_array($this->storage->get($this->storageKey))) {
+                $this->fromPrevious = $this->storage->get($this->storageKey);
+            }
+            $this->storage->set($this->storageKey, []);
         }
-        $this->storage[$this->storageKey] = [];
+        else {
+            if (isset($this->storage[$this->storageKey]) && is_array($this->storage[$this->storageKey])) {
+                $this->fromPrevious = $this->storage[$this->storageKey];
+            }
+            $this->storage[$this->storageKey] = [];
+        }
     }
 
     /**
@@ -75,12 +95,22 @@ class Messages
     public function addMessage($key, $message)
     {
         //Create Array for this key
-        if (!isset($this->storage[$this->storageKey][$key])) {
-            $this->storage[$this->storageKey][$key] = array();
+        if ($this->storageTypeIsSessionManager) {
+            $tmpArray = $this->storage->get($this->storageKey);
+            if ($tmpArray !== null && !isset($tmpArray[$key])) {
+                $tmpArray[$key] = array();
+            }
+            $tmpArray[$key] = $message;
+            $this->storage->set($this->storageKey, $tmpArray);
         }
+        else {
+            if (!isset($this->storage[$this->storageKey][$key])) {
+                $this->storage[$this->storageKey][$key] = array();
+            }
 
-        //Push onto the array
-        $this->storage[$this->storageKey][$key][] = $message;
+            //Push onto the array
+            $this->storage[$this->storageKey][$key][] = $message;
+        }
     }
 
     /**
