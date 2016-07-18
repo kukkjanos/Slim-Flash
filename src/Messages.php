@@ -53,7 +53,7 @@ class Messages
      * @throws RuntimeException if the session cannot be found
      * @throws InvalidArgumentException if the store is not array-like
      */
-    public function __construct(&$storage = null)
+    public function __construct($storage = null)
     {
         // Set storage type
         if ($storage instanceof SessionManager)
@@ -63,7 +63,10 @@ class Messages
         if (is_array($storage) || $storage instanceof ArrayAccess || $this->storageTypeIsSessionManager) {
             $this->storage = &$storage;
         } elseif (is_null($storage)) {
-            if (!isset($_SESSION)) {
+            if ($this->storageTypeIsSessionManager) {
+                throw new RuntimeException('Flash messages middleware failed. SessionManager not found.');
+            }
+            elseif (!isset($_SESSION)) {
                 throw new RuntimeException('Flash messages middleware failed. Session not found.');
             }
             $this->storage = &$_SESSION;
